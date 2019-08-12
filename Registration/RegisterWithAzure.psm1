@@ -311,7 +311,7 @@ It is very important to ensure you are logged in to the correct Azure Account in
 function Remove-AzsRegistration{
 [CmdletBinding()]
     param(
-    [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $true)]
         [PSCredential] $PrivilegedEndpointCredential,
 
         [Parameter(Mandatory = $true)]
@@ -1005,6 +1005,8 @@ Function Remove-AzsActivationResource{
 
     Log-Output "*********************** Begin log: $($PSCmdlet.MyInvocation.MyCommand.Name) ***********************`r`n"
 
+    Log-Warning "This is not a right cmdlet to deactivate Azure Stack. Please use DeActivate-AzureStack instead if you intend to deactivate Azure Stack"
+
     try
     {
         $session = Initialize-PrivilegedEndpointSession -PrivilegedEndpoint $PrivilegedEndpoint -PrivilegedEndpointCredential $PrivilegedEndpointCredential -Verbose
@@ -1408,10 +1410,36 @@ DeActivates features in AzureStack
 function DeActivate-AzureStack{
 [CmdletBinding()]
     param(
-        [Parameter(Mandatory = $true)]
-        [System.Management.Automation.Runspaces.PSSession] $Session
+        [Parameter(ParameterSetName='Session', Mandatory = $true)]
+        [System.Management.Automation.Runspaces.PSSession] $Session,
+
+        [Parameter(ParameterSetName='Endpoint', Mandatory = $true)]
+        [String] $PrivilegedEndpoint,
+
+        [Parameter(ParameterSetName='Endpoint', Mandatory = $true)]
+        [PSCredential] $PrivilegedEndpointCredential
     )
 
+    $ErrorActionPreference = [System.Management.Automation.ActionPreference]::Stop
+    $VerbosePreference = [System.Management.Automation.ActionPreference]::Continue
+
+    New-RegistrationLogFile -RegistrationFunction $PSCmdlet.MyInvocation.MyCommand.Name
+
+    Log-Output "*********************** Begin log: $($PSCmdlet.MyInvocation.MyCommand.Name) ***********************`r`n"
+
+    # Write-Output $PSCmdlet.ParameterSetName
+    if($PSCmdlet.ParameterSetName -eq 'Endpoint')
+    {
+        try
+        {
+            $session = Initialize-PrivilegedEndpointSession -PrivilegedEndpoint $PrivilegedEndpoint -PrivilegedEndpointCredential $PrivilegedEndpointCredential -Verbose
+        }
+        catch
+        {
+            Log-Throw "Error creating session with the Azure Stack Environment"
+        }
+    }
+ 
     $currentAttempt = 0
     $maxAttempt = 3
     $sleepSeconds = 10 
@@ -1419,7 +1447,9 @@ function DeActivate-AzureStack{
     {
         try
         {
+            Log-Output "De-Activating Azure Stack (this may take up to 10 minutes to complete)."
             $activation = Invoke-Command -Session $session -ScriptBlock { Remove-AzureStackActivation }
+            Log-Output "DeActivation of Azure Stack features successful"
             break
         }
         catch
@@ -1434,6 +1464,8 @@ function DeActivate-AzureStack{
             } 
         }
     } while ($currentAttempt -lt $maxAttempt)
+
+    Log-Output "*********************** End log: $($PSCmdlet.MyInvocation.MyCommand.Name) ***********************`r`n"
 }
 
 <#
@@ -1858,6 +1890,9 @@ function Log-Throw{
 }
 
 #endregion
+
+# Common functions
+Export-ModuleMember DeActivate-AzureStack
 
 # Disconnected functions
 Export-ModuleMember Get-AzsRegistrationToken
